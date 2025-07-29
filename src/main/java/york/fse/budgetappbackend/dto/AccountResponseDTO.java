@@ -1,12 +1,13 @@
 package york.fse.budgetappbackend.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class AccountResponseDTO {
     private Long id;
     private String name;
     private String type;
-    private Double balance;
+    private BigDecimal balance;
     private Long userId;
     private LocalDateTime createdAt;
 
@@ -19,8 +20,8 @@ public class AccountResponseDTO {
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
 
-    public Double getBalance() { return balance; }
-    public void setBalance(Double balance) { this.balance = balance; }
+    public BigDecimal getBalance() { return balance; }
+    public void setBalance(BigDecimal balance) { this.balance = balance; }
 
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }

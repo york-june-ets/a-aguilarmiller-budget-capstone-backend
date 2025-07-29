@@ -11,6 +11,8 @@ import york.fse.budgetappbackend.repository.AccountRepository;
 import york.fse.budgetappbackend.repository.TransactionRepository;
 import york.fse.budgetappbackend.repository.UserRepository;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -49,6 +51,22 @@ public class TransactionServiceImpl implements TransactionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         transaction.setUser(user);
+
+        // 💰 Only update balance if transaction occurred on/after account creation date
+        BigDecimal amount = dto.getAmount();
+        TransactionType type = transaction.getType();
+        LocalDate txDate = dto.getDate();
+        LocalDate accountCreated = account.getCreatedAt().toLocalDate();
+
+        if (!txDate.isBefore(accountCreated)) {
+            if (type == TransactionType.INCOME || type == TransactionType.TRANSFER_IN) {
+                account.setBalance(account.getBalance().add(amount));
+            } else if (type == TransactionType.EXPENSE || type == TransactionType.TRANSFER_OUT) {
+                account.setBalance(account.getBalance().subtract(amount));
+            }
+
+            accountRepository.save(account);
+        }
 
         Transaction saved = transactionRepository.save(transaction);
         return mapToResponseDTO(saved);
@@ -99,7 +117,7 @@ public class TransactionServiceImpl implements TransactionService {
         dto.setType(t.getType().toString());
         dto.setDate(t.getDate());
         dto.setAccountId(t.getAccount().getId());
-        dto.setCategories(t.getCategories());
+        dto.setCategories(t.getCategories() != null ? t.getCategories() : List.of());
         dto.setAccountName(t.getAccount().getName());
         return dto;
     }

@@ -1,10 +1,12 @@
 package york.fse.budgetappbackend.dto;
 
+import java.math.BigDecimal;
+
 public class AccountRequestDTO {
     private Long userId;
     private String name;
     private String type;
-    private Double balance;
+    private BigDecimal balance;
 
 
     public Long getUserId() { return userId; }
@@ -16,6 +18,6 @@ public class AccountRequestDTO {
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
 
-    public Double getBalance() { return balance; }
-    public void setBalance(Double balance) { this.balance = balance; }
+    public BigDecimal getBalance() { return balance; }
+    public void setBalance(BigDecimal balance) { this.balance = balance; }
 }

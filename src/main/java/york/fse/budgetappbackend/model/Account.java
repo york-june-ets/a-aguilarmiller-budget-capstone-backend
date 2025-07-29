@@ -1,6 +1,8 @@
 package york.fse.budgetappbackend.model;
 
 import jakarta.persistence.*;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,7 +17,8 @@ public class Account {
 
     private String type; // "checking" or "savings"
 
-    private Double balance;
+    @Column(nullable = false)
+    private BigDecimal balance;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -32,8 +35,8 @@ public class Account {
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
 
-    public Double getBalance() { return balance; }
-    public void setBalance(Double balance) { this.balance = balance; }
+    public BigDecimal getBalance() { return balance; }
+    public void setBalance(BigDecimal balance) { this.balance = balance; }
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }

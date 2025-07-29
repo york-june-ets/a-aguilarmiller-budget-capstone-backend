@@ -1,59 +1,42 @@
 package york.fse.budgetappbackend.model;
 
 import jakarta.persistence.*;
-import java.util.List;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "accounts")
 public class Account {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String name;
+    private String name; // nickname
+
+    private String type; // "checking" or "savings"
+
     private Double balance;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
 
-    @OneToMany(mappedBy = "account")
-    private List<Transaction> transactions;
+    private LocalDateTime createdAt = LocalDateTime.now();
 
     // Getters & Setters
-    public String getName() {
-        return name;
-    }
+    public Long getId() { return id; }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public Double getBalance() {
-        return balance;
-    }
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 
-    public void setBalance(Double balance) {
-        this.balance = balance;
-    }
+    public Double getBalance() { return balance; }
+    public void setBalance(Double balance) { this.balance = balance; }
 
-    public User getUser() {
-        return user;
-    }
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
-    public void setUser(User user) {
-        this.user = user;
-    }
-
-    public List<Transaction> getTransactions() {
-        return transactions;
-    }
-
-    public void setTransactions(List<Transaction> transactions) {
-        this.transactions = transactions;
-    }
-
-    public Long getId() {
-        return id;
-    }
+    public LocalDateTime getCreatedAt() { return createdAt; }
 }

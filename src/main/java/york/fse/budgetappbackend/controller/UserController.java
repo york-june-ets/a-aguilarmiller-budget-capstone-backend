@@ -54,7 +54,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<String> updateUser(@PathVariable Long id, @RequestBody UserUpdateDTO dto) {
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UserUpdateDTO updateDTO) {
         Optional<User> optionalUser = userRepository.findById(id);
         if (optionalUser.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -62,17 +62,17 @@ public class UserController {
 
         User user = optionalUser.get();
 
-        if (dto.getEmail() != null) user.setEmail(dto.getEmail());
-        if (dto.getPassword() != null) {
-            String hashed = PasswordUtil.hashPassword(dto.getPassword());
+        if (updateDTO.getFirstName() != null) user.setFirstName(updateDTO.getFirstName());
+        if (updateDTO.getLastName() != null) user.setLastName(updateDTO.getLastName());
+        if (updateDTO.getPhone() != null) user.setPhone(updateDTO.getPhone());
+        if (updateDTO.getEmail() != null) user.setEmail(updateDTO.getEmail());
+        if (updateDTO.getPassword() != null) {
+            String hashed = PasswordUtil.hashPassword(updateDTO.getPassword());
             user.setPassword(hashed);
         }
-        if (dto.getFirstName() != null) user.setFirstName(dto.getFirstName());
-        if (dto.getLastName() != null) user.setLastName(dto.getLastName());
-        if (dto.getPhone() != null) user.setPhone(dto.getPhone());
 
-        userRepository.save(user);
-        return ResponseEntity.ok("User updated");
+        User updated = userRepository.save(user);
+        return ResponseEntity.ok(updated); // Return full updated user as JSON
     }
 
     @GetMapping("/{id}")

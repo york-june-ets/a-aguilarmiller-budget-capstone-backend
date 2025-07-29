@@ -1,60 +1,46 @@
 package york.fse.budgetappbackend.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public class TransactionResponseDTO {
     private Long id;
-    private Double amount;
+    private BigDecimal amount;
     private String description;
     private String type;
     private LocalDate date;
     private Long accountId;
-    private String category;
+    private List<String> categories;
+    private String accountName;
 
-//    Getters & Setters
-
-    public Double getAmount() {
-        return amount;
+    public String getAccountName() {
+        return accountName;
     }
 
-    public void setAmount(Double amount) {
-        this.amount = amount;
+    public void setAccountName(String accountName) {
+        this.accountName = accountName;
     }
 
-    public String getDescription() {
-        return description;
-    }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public String getType() {
-        return type;
-    }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
 
-    public void setType(String type) {
-        this.type = type;
-    }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
-    public LocalDate getDate() {
-        return date;
-    }
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 
-    public void setDate(LocalDate date) {
-        this.date = date;
-    }
+    public LocalDate getDate() { return date; }
+    public void setDate(LocalDate date) { this.date = date; }
 
-    public Long getAccountId() {
-        return accountId;
-    }
+    public Long getAccountId() { return accountId; }
+    public void setAccountId(Long accountId) { this.accountId = accountId; }
 
-    public String getCategory() {
-        return category;
-    }
-
-    public void setCategory(String category) {
-        this.category = category;
-    }
-
+    public List<String> getCategories() { return categories; }
+    public void setCategories(List<String> categories) { this.categories = categories; }
 }

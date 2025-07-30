@@ -34,42 +34,31 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
 
     @Override
     public RecurringTransactionResponseDTO createRecurringTransaction(Long userId, RecurringTransactionRequestDTO dto) {
-        Optional<User> optionalUser = userRepository.findById(userId);
-        if (optionalUser.isEmpty()) {
-            throw new IllegalArgumentException("User not found with id " + userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+
+        RecurringTransaction recurringTransaction = new RecurringTransaction();
+        recurringTransaction.setUser(user);
+        recurringTransaction.setDescription(dto.getDescription());
+        recurringTransaction.setAmount(dto.getAmount());
+        recurringTransaction.setStartDate(dto.getStartDate());
+        recurringTransaction.setNextDate(calculateNextDate(dto.getStartDate(), dto.getFrequency()));
+
+        recurringTransaction.setLastGeneratedDate(null);
+        recurringTransaction.setCategories(dto.getCategories());
+
+        // Normalize frequency to lowercase to match database constraint
+        recurringTransaction.setFrequency(dto.getFrequency().toLowerCase());
+
+        if (dto.getAccountId() != null) {
+            Account account = accountRepository.findById(dto.getAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found with ID: " + dto.getAccountId()));
+            recurringTransaction.setAccount(account);
         }
 
-        Optional<Account> optionalAccount = accountRepository.findById(dto.getAccountId());
-        if (optionalAccount.isEmpty()) {
-            throw new IllegalArgumentException("Account not found with id " + dto.getAccountId());
-        }
+        recurringTransactionRepository.save(recurringTransaction);
 
-        RecurringTransaction transaction = new RecurringTransaction();
-        transaction.setUser(optionalUser.get());
-        transaction.setAccount(optionalAccount.get());
-        transaction.setDescription(dto.getDescription());
-        transaction.setAmount(dto.getAmount());
-        transaction.setFrequency(dto.getFrequency());
-        transaction.setStartDate(dto.getStartDate());
-        transaction.setNextDate(calculateNextDate(dto.getStartDate(), dto.getFrequency()));
-        transaction.setCategories(dto.getCategories());
-        transaction.setLastGeneratedDate(null);
-
-        RecurringTransaction saved = recurringTransactionRepository.save(transaction);
-
-        return new RecurringTransactionResponseDTO(
-                saved.getId(),
-                saved.getUser().getId(),
-                saved.getAccount().getId(),
-                saved.getAccount().getName(),
-                saved.getDescription(),
-                saved.getAmount(),
-                saved.getFrequency(),
-                saved.getStartDate(),
-                saved.getNextDate(),
-                saved.getCategories(),
-                saved.getLastGeneratedDate()
-        );
+        return mapToResponseDTO(recurringTransaction);
     }
 
     @Override
@@ -106,5 +95,21 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
             case "yearly" -> start.plusYears(1);
             default -> throw new IllegalArgumentException("Invalid frequency: " + frequency);
         };
+    }
+
+    private RecurringTransactionResponseDTO mapToResponseDTO(RecurringTransaction tx) {
+        return new RecurringTransactionResponseDTO(
+                tx.getId(),
+                tx.getUser().getId(),
+                tx.getAccount() != null ? tx.getAccount().getId() : null,
+                tx.getAccount() != null ? tx.getAccount().getName() : null,
+                tx.getDescription(),
+                tx.getAmount(),
+                tx.getFrequency(),
+                tx.getStartDate(),
+                tx.getNextDate(),
+                tx.getCategories(),
+                tx.getLastGeneratedDate()
+        );
     }
 }

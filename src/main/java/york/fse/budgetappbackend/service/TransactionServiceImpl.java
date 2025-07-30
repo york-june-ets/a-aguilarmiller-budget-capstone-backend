@@ -3,18 +3,12 @@ package york.fse.budgetappbackend.service;
 import org.springframework.stereotype.Service;
 import york.fse.budgetappbackend.dto.TransactionRequestDTO;
 import york.fse.budgetappbackend.dto.TransactionResponseDTO;
-import york.fse.budgetappbackend.model.Account;
-import york.fse.budgetappbackend.model.Transaction;
-import york.fse.budgetappbackend.model.TransactionType;
-import york.fse.budgetappbackend.model.User;
-import york.fse.budgetappbackend.repository.AccountRepository;
-import york.fse.budgetappbackend.repository.TransactionRepository;
-import york.fse.budgetappbackend.repository.UserRepository;
+import york.fse.budgetappbackend.model.*;
+import york.fse.budgetappbackend.repository.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,15 +17,18 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final BudgetRepository budgetRepository;
 
     public TransactionServiceImpl(
             TransactionRepository transactionRepository,
             AccountRepository accountRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            BudgetRepository budgetRepository
     ) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
+        this.budgetRepository = budgetRepository;
     }
 
     @Override
@@ -58,17 +55,13 @@ public class TransactionServiceImpl implements TransactionService {
                 ? account.getCreatedAt().toLocalDate()
                 : txDate;
 
-        // Auto-generate transfer descriptions if empty
         if ((type == TransactionType.TRANSFER_IN || type == TransactionType.TRANSFER_OUT)
                 && (dto.getDescription() == null || dto.getDescription().isBlank())) {
 
             String targetName = "external account";
-
             if (dto.getTransferTargetAccountId() != null) {
                 Optional<Account> target = accountRepository.findById(dto.getTransferTargetAccountId());
-                if (target.isPresent()) {
-                    targetName = target.get().getName();
-                }
+                targetName = target.map(Account::getName).orElse(targetName);
             }
 
             if (type == TransactionType.TRANSFER_OUT) {
@@ -91,7 +84,47 @@ public class TransactionServiceImpl implements TransactionService {
 
         Transaction saved = transactionRepository.save(transaction);
 
-        // If internal transfer, create mirrored transaction
+        List<Budget> activeBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId);
+        Set<String> txCategories = new HashSet<>(dto.getCategories());
+
+        Long selectedBudgetId = dto.getSelectedBudgetId();
+        if (selectedBudgetId != null) {
+            Budget selectedBudget = budgetRepository.findById(selectedBudgetId)
+                    .orElseThrow(() -> new IllegalArgumentException("Selected budget not found"));
+
+            boolean categoryMatches = selectedBudget.getCategories().stream()
+                    .anyMatch(txCategories::contains);
+
+            if (!categoryMatches) {
+                throw new IllegalArgumentException("Selected budget does not match transaction categories.");
+            }
+
+            selectedBudget.setActualSpend(selectedBudget.getActualSpend().add(amount));
+            budgetRepository.save(selectedBudget);
+        } else {
+            Optional<Budget> firstMatch = activeBudgets.stream()
+                    .filter(b -> b.getCategories().stream().anyMatch(txCategories::contains))
+                    .findFirst();
+            System.out.println("➡️ Transaction Categories: " + txCategories);
+            System.out.println("📋 Checking active budgets...");
+
+            for (Budget b : activeBudgets) {
+                System.out.println("🧾 Budget ID " + b.getId() + ", Categories: " + b.getCategories());
+                boolean matched = b.getCategories().stream().anyMatch(txCategories::contains);
+                System.out.println("   → Matched: " + matched);
+            }
+
+            firstMatch.ifPresent(budget -> {
+                budget.setActualSpend(budget.getActualSpend().add(amount));
+                budgetRepository.save(budget);
+            });
+            firstMatch.ifPresent(budget -> {
+                budget.setActualSpend(budget.getActualSpend().add(amount));
+                budgetRepository.save(budget);
+            });
+        }
+
+        // MIRROR IF TRANSFER
         if (dto.getTransferTargetAccountId() != null) {
             Account targetAccount = accountRepository.findById(dto.getTransferTargetAccountId())
                     .orElseThrow(() -> new IllegalArgumentException("Transfer target account not found"));
@@ -126,33 +159,97 @@ public class TransactionServiceImpl implements TransactionService {
         return mapToResponseDTO(saved);
     }
 
-
     @Override
     public TransactionResponseDTO updateTransaction(Long id, TransactionRequestDTO dto) {
-        Transaction transaction = transactionRepository.findById(id)
+        Transaction existing = transactionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
 
-        transaction.setAmount(dto.getAmount());
-        transaction.setDescription(dto.getDescription());
-        transaction.setType(TransactionType.valueOf(dto.getType().toUpperCase()));
-        transaction.setDate(dto.getDate());
-        transaction.setCategories(dto.getCategories());
+        BigDecimal oldAmount = existing.getAmount();
+        List<String> oldCategories = existing.getCategories();
+        Long userId = existing.getUser().getId();
+        Set<String> newCategories = new HashSet<>(dto.getCategories());
 
-        if (!transaction.getAccount().getId().equals(dto.getAccountId())) {
+        List<Budget> userBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId);
+
+        Long oldSelectedBudgetId = dto.getSelectedBudgetId();
+
+        if (oldSelectedBudgetId != null) {
+            Budget oldBudget = budgetRepository.findById(oldSelectedBudgetId)
+                    .orElseThrow(() -> new IllegalArgumentException("Selected budget not found"));
+
+            oldBudget.setActualSpend(oldBudget.getActualSpend().subtract(oldAmount));
+            budgetRepository.save(oldBudget);
+        } else {
+            Optional<Budget> firstMatch = userBudgets.stream()
+                    .filter(b -> b.getCategories().stream().anyMatch(newCategories::contains))
+                    .findFirst();
+
+            firstMatch.ifPresent(budget -> {
+                budget.setActualSpend(budget.getActualSpend().add(dto.getAmount()));
+                budgetRepository.save(budget);
+            });
+        }
+        existing.setAmount(dto.getAmount());
+        existing.setDescription(dto.getDescription());
+        existing.setType(TransactionType.valueOf(dto.getType().toUpperCase()));
+        existing.setDate(dto.getDate());
+        existing.setCategories(dto.getCategories());
+
+        if (!existing.getAccount().getId().equals(dto.getAccountId())) {
             Account newAccount = accountRepository.findById(dto.getAccountId())
                     .orElseThrow(() -> new IllegalArgumentException("Account not found"));
-            transaction.setAccount(newAccount);
+            existing.setAccount(newAccount);
         }
 
-        Transaction updated = transactionRepository.save(transaction);
+        Transaction updated = transactionRepository.save(existing);
+
+        Long selectedBudgetId = dto.getSelectedBudgetId();
+
+        if (selectedBudgetId != null) {
+            Budget budget = budgetRepository.findById(selectedBudgetId)
+                    .orElseThrow(() -> new IllegalArgumentException("Selected budget not found"));
+
+            boolean categoryMatches = budget.getCategories().stream().anyMatch(newCategories::contains);
+            if (!categoryMatches) {
+                throw new IllegalArgumentException("Selected budget does not match transaction categories.");
+            }
+
+            budget.setActualSpend(budget.getActualSpend().add(dto.getAmount()));
+            budgetRepository.save(budget);
+        } else {
+            Optional<Budget> firstMatch = userBudgets.stream()
+                    .filter(b -> b.getCategories().stream().anyMatch(newCategories::contains))
+                    .findFirst();
+
+            firstMatch.ifPresent(budget -> {
+                budget.setActualSpend(budget.getActualSpend().add(dto.getAmount()));
+                budgetRepository.save(budget);
+            });
+        }
+
         return mapToResponseDTO(updated);
     }
 
     @Override
     public void deleteTransaction(Long id) {
-        if (!transactionRepository.existsById(id)) {
-            throw new IllegalArgumentException("Transaction not found");
-        }
+        Transaction transaction = transactionRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+
+        BigDecimal amount = transaction.getAmount();
+        List<String> categories = transaction.getCategories();
+        Long userId = transaction.getUser().getId();
+
+        List<Budget> userBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId);
+
+        Optional<Budget> firstMatch = userBudgets.stream()
+                .filter(b -> b.getCategories().stream().anyMatch(categories::contains))
+                .findFirst();
+
+        firstMatch.ifPresent(budget -> {
+            budget.setActualSpend(budget.getActualSpend().subtract(amount));
+            budgetRepository.save(budget);
+        });
+
         transactionRepository.deleteById(id);
     }
 

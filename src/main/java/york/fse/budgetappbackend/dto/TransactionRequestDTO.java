@@ -12,12 +12,15 @@ public class TransactionRequestDTO {
     private Long accountId;
     private List<String> categories;
     private Long transferTargetAccountId;
+    private Long selectedBudgetId;
+
 
     public Long getTransferTargetAccountId() { return transferTargetAccountId; }
     public void setTransferTargetAccountId(Long id) { this.transferTargetAccountId = id; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
-
+    public Long getSelectedBudgetId() { return selectedBudgetId; }
+    public void setSelectedBudgetId(Long selectedBudgetId) { this.selectedBudgetId = selectedBudgetId; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 

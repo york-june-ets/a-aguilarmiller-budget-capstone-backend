@@ -11,14 +11,14 @@ import java.util.List;
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
-    // Get all transactions for a specific user
-    List<Transaction> findAllByUserIdOrderByDateDesc(Long userId);
+    // Get all transactions for a specific user, newest first
+    List<Transaction> findAllByUserIdOrderByDateDescIdDesc(Long userId);
 
-    // Filter by account
-    List<Transaction> findAllByUserIdAndAccountIdOrderByDateDesc(Long userId, Long accountId);
+    // Filter by account, newest first
+    List<Transaction> findAllByUserIdAndAccountIdOrderByDateDescIdDesc(Long userId, Long accountId);
 
-    // Filter by a category name in the categories list
-    @Query("SELECT t FROM Transaction t JOIN t.categories c WHERE t.user.id = :userId AND c = :category ORDER BY t.date DESC")
+    // Filter by category name, newest first
+    @Query("SELECT t FROM Transaction t JOIN t.categories c WHERE t.user.id = :userId AND c = :category ORDER BY t.date DESC, t.id DESC")
     List<Transaction> findAllByUserIdAndCategoryName(
             @Param("userId") Long userId,
             @Param("category") String category

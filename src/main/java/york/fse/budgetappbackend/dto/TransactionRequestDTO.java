@@ -11,7 +11,10 @@ public class TransactionRequestDTO {
     private LocalDate date;
     private Long accountId;
     private List<String> categories;
+    private Long transferTargetAccountId;
 
+    public Long getTransferTargetAccountId() { return transferTargetAccountId; }
+    public void setTransferTargetAccountId(Long id) { this.transferTargetAccountId = id; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
 

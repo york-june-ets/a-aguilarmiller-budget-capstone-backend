@@ -65,19 +65,7 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
     public List<RecurringTransactionResponseDTO> getRecurringTransactionsByUser(Long userId) {
         return recurringTransactionRepository.findByUserId(userId)
                 .stream()
-                .map(tx -> new RecurringTransactionResponseDTO(
-                        tx.getId(),
-                        tx.getUser().getId(),
-                        tx.getAccount().getId(),
-                        tx.getAccount().getName(),
-                        tx.getDescription(),
-                        tx.getAmount(),
-                        tx.getFrequency(),
-                        tx.getStartDate(),
-                        tx.getNextDate(),
-                        tx.getCategories(),
-                        tx.getLastGeneratedDate()
-                ))
+                .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
     }
 
@@ -102,7 +90,7 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
                 tx.getId(),
                 tx.getUser().getId(),
                 tx.getAccount() != null ? tx.getAccount().getId() : null,
-                tx.getAccount() != null ? tx.getAccount().getName() : null,
+                tx.getAccount() != null ? tx.getAccount().getName() : "Deleted Account",
                 tx.getDescription(),
                 tx.getAmount(),
                 tx.getFrequency(),

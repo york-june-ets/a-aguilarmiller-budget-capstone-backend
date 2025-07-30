@@ -39,9 +39,8 @@ public class TransactionServiceImpl implements TransactionService {
         Transaction transaction = new Transaction();
 
         transaction.setAmount(dto.getAmount());
-        transaction.setDescription(dto.getDescription());
-        transaction.setType(TransactionType.valueOf(dto.getType().toUpperCase()));
         transaction.setDate(dto.getDate());
+        transaction.setType(TransactionType.valueOf(dto.getType().toUpperCase()));
         transaction.setCategories(dto.getCategories());
 
         Account account = accountRepository.findById(dto.getAccountId())
@@ -52,11 +51,34 @@ public class TransactionServiceImpl implements TransactionService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         transaction.setUser(user);
 
-        // 💰 Only update balance if transaction occurred on/after account creation date
-        BigDecimal amount = dto.getAmount();
         TransactionType type = transaction.getType();
+        BigDecimal amount = dto.getAmount();
         LocalDate txDate = dto.getDate();
-        LocalDate accountCreated = account.getCreatedAt().toLocalDate();
+        LocalDate accountCreated = account.getCreatedAt() != null
+                ? account.getCreatedAt().toLocalDate()
+                : txDate;
+
+        // Auto-generate transfer descriptions if empty
+        if ((type == TransactionType.TRANSFER_IN || type == TransactionType.TRANSFER_OUT)
+                && (dto.getDescription() == null || dto.getDescription().isBlank())) {
+
+            String targetName = "external account";
+
+            if (dto.getTransferTargetAccountId() != null) {
+                Optional<Account> target = accountRepository.findById(dto.getTransferTargetAccountId());
+                if (target.isPresent()) {
+                    targetName = target.get().getName();
+                }
+            }
+
+            if (type == TransactionType.TRANSFER_OUT) {
+                transaction.setDescription("Transfer to " + targetName);
+            } else {
+                transaction.setDescription("Transfer from " + targetName);
+            }
+        } else {
+            transaction.setDescription(dto.getDescription());
+        }
 
         if (!txDate.isBefore(accountCreated)) {
             if (type == TransactionType.INCOME || type == TransactionType.TRANSFER_IN) {
@@ -64,13 +86,46 @@ public class TransactionServiceImpl implements TransactionService {
             } else if (type == TransactionType.EXPENSE || type == TransactionType.TRANSFER_OUT) {
                 account.setBalance(account.getBalance().subtract(amount));
             }
-
             accountRepository.save(account);
         }
 
         Transaction saved = transactionRepository.save(transaction);
+
+        // If internal transfer, create mirrored transaction
+        if (dto.getTransferTargetAccountId() != null) {
+            Account targetAccount = accountRepository.findById(dto.getTransferTargetAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Transfer target account not found"));
+
+            Transaction mirrored = new Transaction();
+            mirrored.setUser(user);
+            mirrored.setAccount(targetAccount);
+            mirrored.setDate(txDate);
+            mirrored.setAmount(amount);
+            mirrored.setCategories(dto.getCategories());
+
+            if (type == TransactionType.TRANSFER_OUT) {
+                mirrored.setType(TransactionType.TRANSFER_IN);
+                mirrored.setDescription("Transfer from " + account.getName());
+            } else {
+                mirrored.setType(TransactionType.TRANSFER_OUT);
+                mirrored.setDescription("Transfer to " + account.getName());
+            }
+
+            transactionRepository.save(mirrored);
+
+            if (!txDate.isBefore(targetAccount.getCreatedAt().toLocalDate())) {
+                if (mirrored.getType() == TransactionType.INCOME || mirrored.getType() == TransactionType.TRANSFER_IN) {
+                    targetAccount.setBalance(targetAccount.getBalance().add(amount));
+                } else {
+                    targetAccount.setBalance(targetAccount.getBalance().subtract(amount));
+                }
+                accountRepository.save(targetAccount);
+            }
+        }
+
         return mapToResponseDTO(saved);
     }
+
 
     @Override
     public TransactionResponseDTO updateTransaction(Long id, TransactionRequestDTO dto) {
@@ -103,7 +158,7 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     public List<TransactionResponseDTO> getAllTransactionsByUser(Long userId) {
-        List<Transaction> transactions = transactionRepository.findAllByUserIdOrderByDateDesc(userId);
+        List<Transaction> transactions = transactionRepository.findAllByUserIdOrderByDateDescIdDesc(userId);
         return transactions.stream()
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
@@ -116,9 +171,9 @@ public class TransactionServiceImpl implements TransactionService {
         dto.setDescription(t.getDescription());
         dto.setType(t.getType().toString());
         dto.setDate(t.getDate());
-        dto.setAccountId(t.getAccount().getId());
+        dto.setAccountId(t.getAccount() != null ? t.getAccount().getId() : null);
         dto.setCategories(t.getCategories() != null ? t.getCategories() : List.of());
-        dto.setAccountName(t.getAccount().getName());
+        dto.setAccountName(t.getAccount() != null ? t.getAccount().getName() : "Deleted Account");
         return dto;
     }
 }

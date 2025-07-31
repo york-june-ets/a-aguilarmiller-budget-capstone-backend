@@ -1,5 +1,6 @@
 package york.fse.budgetappbackend.service;
 
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import york.fse.budgetappbackend.dto.TransactionRequestDTO;
 import york.fse.budgetappbackend.dto.TransactionResponseDTO;
@@ -7,7 +8,7 @@ import york.fse.budgetappbackend.model.*;
 import york.fse.budgetappbackend.repository.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -18,142 +19,116 @@ public class TransactionServiceImpl implements TransactionService {
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
     private final BudgetRepository budgetRepository;
+    private final NotificationRepository notificationRepository;
 
     public TransactionServiceImpl(
             TransactionRepository transactionRepository,
             AccountRepository accountRepository,
             UserRepository userRepository,
-            BudgetRepository budgetRepository
+            BudgetRepository budgetRepository,
+            NotificationRepository notificationRepository
     ) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
         this.budgetRepository = budgetRepository;
+        this.notificationRepository = notificationRepository;
+    }
+
+    private void maybeSendThresholdNotification(Budget budget, BigDecimal previousSpend, BigDecimal newSpend, User user) {
+        BigDecimal threshold75 = budget.getAmount().multiply(BigDecimal.valueOf(0.75));
+        BigDecimal threshold100 = budget.getAmount();
+
+        boolean crossed75 = previousSpend.compareTo(threshold75) < 0
+                && newSpend.compareTo(threshold75) >= 0;
+
+        boolean crossed100 = previousSpend.compareTo(threshold100) < 0
+                && newSpend.compareTo(threshold100) >= 0;
+
+        if (crossed75 || crossed100) {
+            String categoryLabel = budget.getCategories().isEmpty()
+                    ? "a category"
+                    : budget.getCategories().get(0);
+
+            String message = String.format("You have reached %s of your %s budget.",
+                    crossed100 ? "100%" : "75%",
+                    categoryLabel
+            );
+
+            Notification notification = new Notification();
+            notification.setUser(user);
+            notification.setMessage(message);
+            notification.setTimestamp(LocalDateTime.now());
+            notificationRepository.save(notification);
+        }
+    }
+
+    private void updateActualSpendForBudgets(Collection<Budget> budgets, BigDecimal delta) {
+       for (Budget budget : budgets) {
+           budget.setActualSpend(budget.getActualSpend().add(delta));
+           budgetRepository.save(budget);
+       }
     }
 
     @Override
+    @Transactional
     public TransactionResponseDTO createTransaction(Long userId, TransactionRequestDTO dto) {
-        Transaction transaction = new Transaction();
-
-        transaction.setAmount(dto.getAmount());
-        transaction.setDate(dto.getDate());
-        transaction.setType(TransactionType.valueOf(dto.getType().toUpperCase()));
-        transaction.setCategories(dto.getCategories());
-
-        Account account = accountRepository.findById(dto.getAccountId())
-                .orElseThrow(() -> new IllegalArgumentException("Account not found"));
-        transaction.setAccount(account);
-
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        transaction.setUser(user);
 
-        TransactionType type = transaction.getType();
-        BigDecimal amount = dto.getAmount();
-        LocalDate txDate = dto.getDate();
-        LocalDate accountCreated = account.getCreatedAt() != null
-                ? account.getCreatedAt().toLocalDate()
-                : txDate;
-
-        if ((type == TransactionType.TRANSFER_IN || type == TransactionType.TRANSFER_OUT)
-                && (dto.getDescription() == null || dto.getDescription().isBlank())) {
-
-            String targetName = "external account";
-            if (dto.getTransferTargetAccountId() != null) {
-                Optional<Account> target = accountRepository.findById(dto.getTransferTargetAccountId());
-                targetName = target.map(Account::getName).orElse(targetName);
-            }
-
-            if (type == TransactionType.TRANSFER_OUT) {
-                transaction.setDescription("Transfer to " + targetName);
-            } else {
-                transaction.setDescription("Transfer from " + targetName);
-            }
-        } else {
-            transaction.setDescription(dto.getDescription());
+        List<String> categories = dto.getCategories();
+        if (categories == null || categories.isEmpty()) {
+            throw new IllegalArgumentException("At least one category is required.");
         }
 
-        if (!txDate.isBefore(accountCreated)) {
-            if (type == TransactionType.INCOME || type == TransactionType.TRANSFER_IN) {
-                account.setBalance(account.getBalance().add(amount));
-            } else if (type == TransactionType.EXPENSE || type == TransactionType.TRANSFER_OUT) {
-                account.setBalance(account.getBalance().subtract(amount));
+        Transaction transaction = new Transaction();
+        transaction.setUser(user);
+        transaction.setAmount(dto.getAmount());
+        transaction.setDescription(dto.getDescription());
+        transaction.setDate(dto.getDate());
+        TransactionType type = TransactionType.valueOf(dto.getType().toUpperCase());
+        transaction.setType(type);
+        transaction.setCategories(categories);
+
+        Account account = null;
+        if (dto.getAccountId() != null) {
+            account = accountRepository.findById(dto.getAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found"));
+            transaction.setAccount(account);
+
+            switch (type) {
+                case INCOME -> account.setBalance(account.getBalance().add(dto.getAmount()));
+                case EXPENSE, TRANSFER_OUT -> account.setBalance(account.getBalance().subtract(dto.getAmount()));
+                case TRANSFER_IN -> account.setBalance(account.getBalance().add(dto.getAmount()));
             }
+
             accountRepository.save(account);
         }
 
         Transaction saved = transactionRepository.save(transaction);
 
-        List<Budget> activeBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId);
-        Set<String> txCategories = new HashSet<>(dto.getCategories());
+        Budget selectedBudget = null;
+        if (dto.getSelectedBudgetId() != null) {
+            selectedBudget = budgetRepository.findById(dto.getSelectedBudgetId())
+                    .orElseThrow(() -> new IllegalArgumentException("Budget not found"));
 
-        Long selectedBudgetId = dto.getSelectedBudgetId();
-        if (selectedBudgetId != null) {
-            Budget selectedBudget = budgetRepository.findById(selectedBudgetId)
-                    .orElseThrow(() -> new IllegalArgumentException("Selected budget not found"));
-
-            boolean categoryMatches = selectedBudget.getCategories().stream()
-                    .anyMatch(txCategories::contains);
-
-            if (!categoryMatches) {
-                throw new IllegalArgumentException("Selected budget does not match transaction categories.");
+            List<String> selectedBudgetCategories = selectedBudget.getCategories();
+            boolean matches = categories.stream()
+                    .anyMatch(cat -> selectedBudgetCategories.contains(cat));
+            if (!matches) {
+                throw new IllegalArgumentException("Selected budget does not match any transaction categories.");
             }
 
-            selectedBudget.setActualSpend(selectedBudget.getActualSpend().add(amount));
+            BigDecimal previousSpend = selectedBudget.getActualSpend();
+            BigDecimal newSpend = previousSpend.add(dto.getAmount());
+
+            selectedBudget.setActualSpend(newSpend);
             budgetRepository.save(selectedBudget);
+
+            maybeSendThresholdNotification(selectedBudget, previousSpend, newSpend, user);
         } else {
-            Optional<Budget> firstMatch = activeBudgets.stream()
-                    .filter(b -> b.getCategories().stream().anyMatch(txCategories::contains))
-                    .findFirst();
-            System.out.println("➡️ Transaction Categories: " + txCategories);
-            System.out.println("📋 Checking active budgets...");
-
-            for (Budget b : activeBudgets) {
-                System.out.println("🧾 Budget ID " + b.getId() + ", Categories: " + b.getCategories());
-                boolean matched = b.getCategories().stream().anyMatch(txCategories::contains);
-                System.out.println("   → Matched: " + matched);
-            }
-
-            firstMatch.ifPresent(budget -> {
-                budget.setActualSpend(budget.getActualSpend().add(amount));
-                budgetRepository.save(budget);
-            });
-            firstMatch.ifPresent(budget -> {
-                budget.setActualSpend(budget.getActualSpend().add(amount));
-                budgetRepository.save(budget);
-            });
-        }
-
-        // MIRROR IF TRANSFER
-        if (dto.getTransferTargetAccountId() != null) {
-            Account targetAccount = accountRepository.findById(dto.getTransferTargetAccountId())
-                    .orElseThrow(() -> new IllegalArgumentException("Transfer target account not found"));
-
-            Transaction mirrored = new Transaction();
-            mirrored.setUser(user);
-            mirrored.setAccount(targetAccount);
-            mirrored.setDate(txDate);
-            mirrored.setAmount(amount);
-            mirrored.setCategories(dto.getCategories());
-
-            if (type == TransactionType.TRANSFER_OUT) {
-                mirrored.setType(TransactionType.TRANSFER_IN);
-                mirrored.setDescription("Transfer from " + account.getName());
-            } else {
-                mirrored.setType(TransactionType.TRANSFER_OUT);
-                mirrored.setDescription("Transfer to " + account.getName());
-            }
-
-            transactionRepository.save(mirrored);
-
-            if (!txDate.isBefore(targetAccount.getCreatedAt().toLocalDate())) {
-                if (mirrored.getType() == TransactionType.INCOME || mirrored.getType() == TransactionType.TRANSFER_IN) {
-                    targetAccount.setBalance(targetAccount.getBalance().add(amount));
-                } else {
-                    targetAccount.setBalance(targetAccount.getBalance().subtract(amount));
-                }
-                accountRepository.save(targetAccount);
-            }
+            List<Budget> matchingBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId).stream().filter(b -> b.getCategories().stream().anyMatch(categories::contains)).toList();
+      updateActualSpendForBudgets(matchingBudgets, dto.getAmount());
         }
 
         return mapToResponseDTO(saved);
@@ -165,31 +140,21 @@ public class TransactionServiceImpl implements TransactionService {
                 .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
 
         BigDecimal oldAmount = existing.getAmount();
-        List<String> oldCategories = existing.getCategories();
         Long userId = existing.getUser().getId();
         Set<String> newCategories = new HashSet<>(dto.getCategories());
+        BigDecimal newAmount = dto.getAmount();
 
         List<Budget> userBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId);
 
         Long oldSelectedBudgetId = dto.getSelectedBudgetId();
-
         if (oldSelectedBudgetId != null) {
             Budget oldBudget = budgetRepository.findById(oldSelectedBudgetId)
                     .orElseThrow(() -> new IllegalArgumentException("Selected budget not found"));
-
             oldBudget.setActualSpend(oldBudget.getActualSpend().subtract(oldAmount));
             budgetRepository.save(oldBudget);
-        } else {
-            Optional<Budget> firstMatch = userBudgets.stream()
-                    .filter(b -> b.getCategories().stream().anyMatch(newCategories::contains))
-                    .findFirst();
-
-            firstMatch.ifPresent(budget -> {
-                budget.setActualSpend(budget.getActualSpend().add(dto.getAmount()));
-                budgetRepository.save(budget);
-            });
         }
-        existing.setAmount(dto.getAmount());
+
+        existing.setAmount(newAmount);
         existing.setDescription(dto.getDescription());
         existing.setType(TransactionType.valueOf(dto.getType().toUpperCase()));
         existing.setDate(dto.getDate());
@@ -204,7 +169,6 @@ public class TransactionServiceImpl implements TransactionService {
         Transaction updated = transactionRepository.save(existing);
 
         Long selectedBudgetId = dto.getSelectedBudgetId();
-
         if (selectedBudgetId != null) {
             Budget budget = budgetRepository.findById(selectedBudgetId)
                     .orElseThrow(() -> new IllegalArgumentException("Selected budget not found"));
@@ -214,15 +178,14 @@ public class TransactionServiceImpl implements TransactionService {
                 throw new IllegalArgumentException("Selected budget does not match transaction categories.");
             }
 
-            budget.setActualSpend(budget.getActualSpend().add(dto.getAmount()));
+            budget.setActualSpend(budget.getActualSpend().add(newAmount));
             budgetRepository.save(budget);
         } else {
             Optional<Budget> firstMatch = userBudgets.stream()
                     .filter(b -> b.getCategories().stream().anyMatch(newCategories::contains))
                     .findFirst();
-
             firstMatch.ifPresent(budget -> {
-                budget.setActualSpend(budget.getActualSpend().add(dto.getAmount()));
+                budget.setActualSpend(budget.getActualSpend().add(newAmount));
                 budgetRepository.save(budget);
             });
         }
@@ -262,15 +225,14 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     private TransactionResponseDTO mapToResponseDTO(Transaction t) {
-        TransactionResponseDTO dto = new TransactionResponseDTO();
-        dto.setId(t.getId());
-        dto.setAmount(t.getAmount());
-        dto.setDescription(t.getDescription());
-        dto.setType(t.getType().toString());
-        dto.setDate(t.getDate());
-        dto.setAccountId(t.getAccount() != null ? t.getAccount().getId() : null);
-        dto.setCategories(t.getCategories() != null ? t.getCategories() : List.of());
-        dto.setAccountName(t.getAccount() != null ? t.getAccount().getName() : "Deleted Account");
-        return dto;
+        TransactionResponseDTO response = new TransactionResponseDTO();
+        response.setId(t.getId());
+        response.setDescription(t.getDescription());
+        response.setAmount(t.getAmount());
+        response.setDate(t.getDate());
+        response.setType(t.getType().toString());
+        response.setCategories(t.getCategories());
+        response.setAccountName(t.getAccount() != null ? t.getAccount().getName() : "Deleted Account");
+        return response;
     }
 }

@@ -13,7 +13,15 @@ public class TransactionRequestDTO {
     private List<String> categories;
     private Long transferTargetAccountId;
     private Long selectedBudgetId;
+    private Long transferAccountId;
 
+    public Long getTransferAccountId() {
+        return transferAccountId;
+    }
+
+    public void setTransferAccountId(Long transferAccountId) {
+        this.transferAccountId = transferAccountId;
+    }
 
     public Long getTransferTargetAccountId() { return transferTargetAccountId; }
     public void setTransferTargetAccountId(Long id) { this.transferTargetAccountId = id; }

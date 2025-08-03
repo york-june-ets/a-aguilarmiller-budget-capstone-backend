@@ -1,11 +1,11 @@
 package york.fse.budgetappbackend.controller;
 
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import york.fse.budgetappbackend.dto.PaginatedTransactionResponseDTO;
 import york.fse.budgetappbackend.dto.TransactionRequestDTO;
 import york.fse.budgetappbackend.dto.TransactionResponseDTO;
-import york.fse.budgetappbackend.model.Budget;
-import york.fse.budgetappbackend.repository.BudgetRepository;
 import york.fse.budgetappbackend.service.TransactionService;
 
 import java.util.List;
@@ -15,14 +15,9 @@ import java.util.List;
 public class TransactionController {
 
     private final TransactionService transactionService;
-    private final BudgetRepository budgetRepository;
 
-    public TransactionController(
-            TransactionService transactionService,
-            BudgetRepository budgetRepository
-    ) {
+    public TransactionController(TransactionService transactionService) {
         this.transactionService = transactionService;
-        this.budgetRepository = budgetRepository;
     }
 
     @PostMapping("/user/{userId}")
@@ -30,18 +25,8 @@ public class TransactionController {
             @PathVariable Long userId,
             @RequestBody TransactionRequestDTO dto
     ) {
-        List<String> incomingCategories = dto.getCategories();
-        List<Budget> userBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId);
-
-        boolean hasMatch = userBudgets.stream()
-                .flatMap(b -> b.getCategories().stream())
-                .anyMatch(incomingCategories::contains);
-
-        if (!hasMatch) {
-            throw new IllegalArgumentException("At least one category must match an active budget.");
-        }
-
-        return ResponseEntity.ok(transactionService.createTransaction(userId, dto));
+        TransactionResponseDTO response = transactionService.createTransaction(userId, dto);
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}")
@@ -49,7 +34,8 @@ public class TransactionController {
             @PathVariable Long id,
             @RequestBody TransactionRequestDTO dto
     ) {
-        return ResponseEntity.ok(transactionService.updateTransaction(id, dto));
+        TransactionResponseDTO response = transactionService.updateTransaction(id, dto);
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id}")
@@ -59,7 +45,28 @@ public class TransactionController {
     }
 
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<TransactionResponseDTO>> getAllTransactionsByUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(transactionService.getAllTransactionsByUser(userId));
+    public ResponseEntity<PaginatedTransactionResponseDTO> getTransactionsByUser(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Long accountId,
+            @RequestParam(required = false) List<String> categories
+    ) {
+        Page<TransactionResponseDTO> transactionPage =
+                transactionService.getTransactionsByUserWithFilters(
+                        userId, page, size, startDate, endDate, accountId, categories
+                );
+
+        PaginatedTransactionResponseDTO response = new PaginatedTransactionResponseDTO(
+                transactionPage.getContent(),
+                transactionPage.getNumber(),
+                transactionPage.getTotalPages(),
+                transactionPage.getTotalElements(),
+                transactionPage.getSize()
+        );
+
+        return ResponseEntity.ok(response);
     }
 }

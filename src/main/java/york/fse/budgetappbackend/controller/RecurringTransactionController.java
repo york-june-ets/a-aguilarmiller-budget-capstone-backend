@@ -10,6 +10,12 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/recurring-transactions")
+@CrossOrigin(
+        origins = {"http://localhost:3000"},
+        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS},
+        allowedHeaders = "*",
+        allowCredentials = "true"
+)
 public class RecurringTransactionController {
 
     private final RecurringTransactionService recurringTransactionService;
@@ -36,9 +42,26 @@ public class RecurringTransactionController {
         return ResponseEntity.ok(recurringTransactions);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<RecurringTransactionResponseDTO> updateRecurringTransaction(
+            @PathVariable Long id,
+            @RequestBody RecurringTransactionRequestDTO dto
+    ) {
+        try {
+            RecurringTransactionResponseDTO updated = recurringTransactionService.updateRecurringTransaction(id, dto);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteRecurringTransaction(@PathVariable Long id) {
-        recurringTransactionService.deleteRecurringTransaction(id);
-        return ResponseEntity.noContent().build();
+        try {
+            recurringTransactionService.deleteRecurringTransaction(id);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

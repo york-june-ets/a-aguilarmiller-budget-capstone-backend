@@ -1,5 +1,6 @@
 package york.fse.budgetappbackend.service;
 
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import york.fse.budgetappbackend.dto.RecurringTransactionRequestDTO;
 import york.fse.budgetappbackend.dto.RecurringTransactionResponseDTO;
@@ -47,7 +48,6 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
         recurringTransaction.setLastGeneratedDate(null);
         recurringTransaction.setCategories(dto.getCategories());
 
-        // Normalize frequency to lowercase to match database constraint
         recurringTransaction.setFrequency(dto.getFrequency().toLowerCase());
 
         if (dto.getAccountId() != null) {
@@ -70,19 +70,64 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
     }
 
     @Override
+    @Transactional
     public void deleteRecurringTransaction(Long id) {
+        RecurringTransaction recurringTransaction = recurringTransactionRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Recurring transaction not found with id: " + id));
         recurringTransactionRepository.deleteById(id);
     }
 
+    @Override
+    @Transactional
+    public RecurringTransactionResponseDTO updateRecurringTransaction(Long id, RecurringTransactionRequestDTO dto) {
+        RecurringTransaction existingTransaction = recurringTransactionRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Recurring transaction not found with id: " + id));
+
+        existingTransaction.setDescription(dto.getDescription());
+        existingTransaction.setAmount(dto.getAmount());
+        existingTransaction.setFrequency(dto.getFrequency().toLowerCase());
+        existingTransaction.setStartDate(dto.getStartDate());
+        existingTransaction.setCategories(dto.getCategories());
+
+        if (dto.getAccountId() != null) {
+            Account account = accountRepository.findById(dto.getAccountId())
+                    .orElseThrow(() -> new IllegalArgumentException("Account not found with id: " + dto.getAccountId()));
+            existingTransaction.setAccount(account);
+        }
+
+        existingTransaction.setNextDate(calculateNextDate(dto.getStartDate(), dto.getFrequency()));
+
+        RecurringTransaction saved = recurringTransactionRepository.save(existingTransaction);
+        return mapToResponseDTO(saved);
+    }
+
     private LocalDate calculateNextDate(LocalDate start, String frequency) {
-        return switch (frequency.toLowerCase()) {
-            case "daily" -> start.plusDays(1);
-            case "weekly" -> start.plusWeeks(1);
-            case "monthly" -> start.plusMonths(1);
-            case "quarterly" -> start.plusMonths(3);
-            case "yearly" -> start.plusYears(1);
-            default -> throw new IllegalArgumentException("Invalid frequency: " + frequency);
-        };
+        LocalDate now = LocalDate.now();
+        LocalDate nextDate = start;
+
+        while (nextDate.isBefore(now) || nextDate.isEqual(now)) {
+            switch (frequency.toLowerCase()) {
+                case "daily":
+                    nextDate = nextDate.plusDays(1);
+                    break;
+                case "weekly":
+                    nextDate = nextDate.plusWeeks(1);
+                    break;
+                case "monthly":
+                    nextDate = nextDate.plusMonths(1);
+                    break;
+                case "quarterly":
+                    nextDate = nextDate.plusMonths(3);
+                    break;
+                case "yearly":
+                    nextDate = nextDate.plusYears(1);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Invalid frequency: " + frequency);
+            }
+        }
+
+        return nextDate;
     }
 
     private RecurringTransactionResponseDTO mapToResponseDTO(RecurringTransaction tx) {

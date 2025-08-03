@@ -13,6 +13,6 @@ public interface RecurringTransactionService {
 
     void deleteRecurringTransaction(Long id);
 
-    // RecurringTransactionResponseDTO updateRecurringTransaction(Long id, RecurringTransactionRequestDTO dto);
-    // void generateNextOccurrence(Long userId); // if you later automate instances
+    RecurringTransactionResponseDTO updateRecurringTransaction(Long id, RecurringTransactionRequestDTO dto);
+
 }

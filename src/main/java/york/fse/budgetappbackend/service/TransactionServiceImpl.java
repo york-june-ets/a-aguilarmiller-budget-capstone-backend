@@ -113,7 +113,15 @@ public class TransactionServiceImpl implements TransactionService {
         Transaction transferPair = new Transaction();
         transferPair.setUser(originalTransaction.getUser());
         transferPair.setAmount(originalTransaction.getAmount());
-        transferPair.setDescription(description + " (Transfer pair)");
+
+        String transferDescription;
+        if (pairType == TransactionType.TRANSFER_IN) {
+            transferDescription = "Transfer from " + originalTransaction.getAccount().getName();
+        } else {
+            transferDescription = "Transfer to " + transferAccount.getName();
+        }
+
+        transferPair.setDescription(transferDescription);
         transferPair.setDate(originalTransaction.getDate());
         transferPair.setType(pairType);
         transferPair.setAccount(transferAccount);
@@ -167,10 +175,34 @@ public class TransactionServiceImpl implements TransactionService {
         Transaction transaction = new Transaction();
         transaction.setUser(user);
         transaction.setAmount(dto.getAmount());
-        transaction.setDescription(dto.getDescription());
         transaction.setDate(dto.getDate());
         transaction.setType(type);
         transaction.setCategories(dto.getCategories() != null ? dto.getCategories() : new ArrayList<>());
+
+        if (type == TransactionType.TRANSFER_OUT || type == TransactionType.TRANSFER_IN) {
+            String transferDescription;
+
+            if (dto.getTransferAccountId() != null) {
+                Account targetAccount = accountRepository.findById(dto.getTransferAccountId())
+                        .orElseThrow(() -> new IllegalArgumentException("Transfer target account not found"));
+
+                if (type == TransactionType.TRANSFER_OUT) {
+                    transferDescription = "Transfer to " + targetAccount.getName();
+                } else {
+                    transferDescription = "Transfer from " + targetAccount.getName();
+                }
+            } else {
+                if (type == TransactionType.TRANSFER_OUT) {
+                    transferDescription = "Transfer to external";
+                } else {
+                    transferDescription = "Transfer from external";
+                }
+            }
+
+            transaction.setDescription(transferDescription);
+        } else {
+            transaction.setDescription(dto.getDescription());
+        }
 
         if (dto.getAccountId() != null) {
             Account account = accountRepository.findById(dto.getAccountId())
@@ -223,10 +255,34 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         existing.setAmount(newAmount);
-        existing.setDescription(dto.getDescription());
         existing.setType(newType);
         existing.setDate(dto.getDate());
         existing.setCategories(dto.getCategories() != null ? dto.getCategories() : new ArrayList<>());
+
+        if (newType == TransactionType.TRANSFER_OUT || newType == TransactionType.TRANSFER_IN) {
+            String transferDescription;
+
+            if (dto.getTransferAccountId() != null) {
+                Account targetAccount = accountRepository.findById(dto.getTransferAccountId())
+                        .orElseThrow(() -> new IllegalArgumentException("Transfer target account not found"));
+
+                if (newType == TransactionType.TRANSFER_OUT) {
+                    transferDescription = "Transfer to " + targetAccount.getName();
+                } else {
+                    transferDescription = "Transfer from " + targetAccount.getName();
+                }
+            } else {
+                if (newType == TransactionType.TRANSFER_OUT) {
+                    transferDescription = "Transfer to external";
+                } else {
+                    transferDescription = "Transfer from external";
+                }
+            }
+
+            existing.setDescription(transferDescription);
+        } else {
+            existing.setDescription(dto.getDescription());
+        }
 
         Long existingAccountId = existing.getAccount() != null ? existing.getAccount().getId() : null;
         if (!Objects.equals(existingAccountId, dto.getAccountId())) {
@@ -252,7 +308,6 @@ public class TransactionServiceImpl implements TransactionService {
 
         return mapToResponseDTO(updated);
     }
-
     @Override
     @Transactional
     public void deleteTransaction(Long id) {

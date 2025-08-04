@@ -165,25 +165,18 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public TransactionResponseDTO createTransaction(Long userId, TransactionRequestDTO dto) {
-        System.out.println("DEBUG: Creating transaction with date: " + dto.getDate());
-        System.out.println("DEBUG: Current date: " + LocalDate.now());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         TransactionType type = TransactionType.valueOf(dto.getType().toUpperCase());
-
-        if (type == TransactionType.EXPENSE) {
-            validateExpenseCategories(dto.getCategories(), userId);
-        }
-
         Transaction transaction = new Transaction();
         transaction.setUser(user);
         transaction.setAmount(dto.getAmount());
         transaction.setDate(dto.getDate());
         transaction.setType(type);
         transaction.setCategories(dto.getCategories() != null ? dto.getCategories() : new ArrayList<>());
-
+        System.out.println("DEBUG: Transaction before save - categories: " + transaction.getCategories());
         if (type == TransactionType.TRANSFER_OUT || type == TransactionType.TRANSFER_IN) {
             String transferDescription;
 
@@ -217,7 +210,7 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         Transaction saved = transactionRepository.save(transaction);
-
+        System.out.println("DEBUG: Transaction after save - categories: " + saved.getCategories());
         if (type == TransactionType.EXPENSE) {
             updateBudgetSpend(userId, dto.getCategories(), dto.getAmount(),
                     dto.getSelectedBudgetId(), false, user);
@@ -245,10 +238,6 @@ public class TransactionServiceImpl implements TransactionService {
         BigDecimal oldAmount = existing.getAmount();
         BigDecimal newAmount = dto.getAmount();
         Long userId = existing.getUser().getId();
-
-        if (newType == TransactionType.EXPENSE) {
-            validateExpenseCategories(dto.getCategories(), userId);
-        }
 
         if (existing.getAccount() != null) {
             updateAccountBalance(existing.getAccount(), oldType, oldAmount, true);

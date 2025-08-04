@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import york.fse.budgetappbackend.model.Transaction;
+import york.fse.budgetappbackend.dto.CategorySpendingDTO;
+import york.fse.budgetappbackend.dto.MonthlySpendingDTO;
+import java.util.stream.Collectors;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -199,4 +202,49 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("categories") List<String> categories,
             Pageable pageable
     );
+
+    @Query(value = """
+    SELECT tc.categories as category,
+           SUM(t.amount) as total_amount,
+           COUNT(*) as transaction_count
+    FROM transactions t 
+    JOIN transaction_categories tc ON t.id = tc.transaction_id
+    WHERE t.user_id = :userId AND t.type = 'EXPENSE'
+    GROUP BY tc.categories
+    ORDER BY total_amount DESC
+    LIMIT :limit
+    """, nativeQuery = true)
+    List<Object[]> findTopSpendingCategoriesRaw(@Param("userId") Long userId, @Param("limit") int limit);
+
+    @Query(value = """
+    SELECT TO_CHAR(t.date, 'YYYY-MM') as month,
+           SUM(t.amount) as total_amount,
+           COUNT(DISTINCT t.id) as transaction_count
+    FROM transactions t 
+    JOIN transaction_categories tc ON t.id = tc.transaction_id
+    WHERE t.user_id = :userId AND t.type = 'EXPENSE'
+    GROUP BY TO_CHAR(t.date, 'YYYY-MM')
+    ORDER BY month DESC
+    """, nativeQuery = true)
+    List<Object[]> findMonthlySpendingRaw(@Param("userId") Long userId);
+
+    default List<CategorySpendingDTO> findTopSpendingCategories(Long userId, int limit) {
+        return findTopSpendingCategoriesRaw(userId, limit).stream()
+                .map(row -> new CategorySpendingDTO(
+                        (String) row[0],
+                        (java.math.BigDecimal) row[1],
+                        ((Number) row[2]).longValue()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    default List<MonthlySpendingDTO> findMonthlySpending(Long userId) {
+        return findMonthlySpendingRaw(userId).stream()
+                .map(row -> new MonthlySpendingDTO(
+                        (String) row[0],
+                        (java.math.BigDecimal) row[1],
+                        ((Number) row[2]).longValue()
+                ))
+                .collect(Collectors.toList());
+    }
 }

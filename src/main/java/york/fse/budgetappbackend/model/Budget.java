@@ -36,7 +36,7 @@ public class Budget {
     private BigDecimal actualSpend = BigDecimal.ZERO;
 
     @Column(name = "enabled", nullable = false)
-    private boolean enabled = true;
+    private boolean enabled;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

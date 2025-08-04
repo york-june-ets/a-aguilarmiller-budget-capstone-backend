@@ -40,6 +40,9 @@ public class BudgetServiceImpl implements BudgetService {
         budget.setAmount(dto.getAmount());
         budget.setTimeframe(dto.getTimeframe());
         budget.setCategories(dto.getCategories());
+        budget.setEnabled(dto.isEnabled());
+
+        System.out.println("Incoming enabled flag: " + dto.isEnabled());
 
         Budget saved = budgetRepository.save(budget);
         return mapToDTO(saved);
@@ -61,6 +64,7 @@ public class BudgetServiceImpl implements BudgetService {
         budget.setAmount(dto.getAmount());
         budget.setTimeframe(dto.getTimeframe());
         budget.setCategories(dto.getCategories());
+        budget.setEnabled(dto.isEnabled());
 
         Budget updated = budgetRepository.save(budget);
         return mapToDTO(updated);

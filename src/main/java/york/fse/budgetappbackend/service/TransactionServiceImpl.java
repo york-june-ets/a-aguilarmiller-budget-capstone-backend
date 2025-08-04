@@ -63,6 +63,8 @@ public class TransactionServiceImpl implements TransactionService {
         accountRepository.save(account);
     }
 
+
+// potential issue - this doesnt consider the date a transaction was added. updates regardless of the when
     private void updateBudgetSpend(Long userId, List<String> categories, BigDecimal amount,
                                    Long selectedBudgetId, boolean isReversal, User user) {
         BigDecimal adjustedAmount = isReversal ? amount.negate() : amount;
@@ -163,6 +165,9 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public TransactionResponseDTO createTransaction(Long userId, TransactionRequestDTO dto) {
+        System.out.println("DEBUG: Creating transaction with date: " + dto.getDate());
+        System.out.println("DEBUG: Current date: " + LocalDate.now());
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 

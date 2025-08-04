@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.*;
 import york.fse.budgetappbackend.dto.RecurringTransactionRequestDTO;
 import york.fse.budgetappbackend.dto.RecurringTransactionResponseDTO;
 import york.fse.budgetappbackend.service.RecurringTransactionService;
+import york.fse.budgetappbackend.service.RecurringTransactionScheduler;
 
 import java.util.List;
 
@@ -19,9 +20,13 @@ import java.util.List;
 public class RecurringTransactionController {
 
     private final RecurringTransactionService recurringTransactionService;
+    private final RecurringTransactionScheduler recurringTransactionScheduler;
 
-    public RecurringTransactionController(RecurringTransactionService recurringTransactionService) {
+    public RecurringTransactionController(
+            RecurringTransactionService recurringTransactionService,
+            RecurringTransactionScheduler recurringTransactionScheduler) {
         this.recurringTransactionService = recurringTransactionService;
+        this.recurringTransactionScheduler = recurringTransactionScheduler;
     }
 
     @PostMapping("/user/{userId}")
@@ -63,5 +68,11 @@ public class RecurringTransactionController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    @PostMapping("/generate-pending")
+    public ResponseEntity<String> generatePendingTransactions() {
+        recurringTransactionScheduler.runManually();
+        return ResponseEntity.ok("Generated pending recurring transactions - check console logs");
     }
 }

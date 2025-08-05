@@ -97,7 +97,7 @@ public class RecurringTransactionScheduler {
             System.out.println("DEBUG: Recurring categories: " + recurring.getCategories());
 
             TransactionRequestDTO dto = new TransactionRequestDTO();
-            dto.setDescription(recurring.getDescription() + " (Auto)");
+            dto.setDescription(recurring.getDescription() + " (Recurring Transaction)");
             dto.setAmount(recurring.getAmount());
             dto.setDate(date);
             dto.setType("EXPENSE");

@@ -130,12 +130,31 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
         return nextDate;
     }
 
+    private String formatAccountDisplay(Account account) {
+        if (account == null) return "Deleted Account";
+
+        String accountName = account.getName();
+        String accountNumber = account.getAccountNumber();
+
+        if (accountNumber == null || accountNumber.isEmpty()) {
+            return accountName;
+        }
+
+        String lastFour = accountNumber.length() >= 4
+                ? accountNumber.substring(accountNumber.length() - 4)
+                : accountNumber;
+
+        return accountName + " *****" + lastFour;
+    }
+
+
     private RecurringTransactionResponseDTO mapToResponseDTO(RecurringTransaction tx) {
         return new RecurringTransactionResponseDTO(
                 tx.getId(),
                 tx.getUser().getId(),
                 tx.getAccount() != null ? tx.getAccount().getId() : null,
-                tx.getAccount() != null ? tx.getAccount().getName() : "Deleted Account",
+                tx.getAccount() != null ? formatAccountDisplay(tx.getAccount()) : "Deleted Account",
+                tx.getAccount() != null ? tx.getAccount().getAccountNumber() : null,
                 tx.getDescription(),
                 tx.getAmount(),
                 tx.getFrequency(),

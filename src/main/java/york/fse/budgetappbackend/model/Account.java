@@ -24,9 +24,24 @@ public class Account {
     @JoinColumn(name = "user_id")
     private User user;
 
+    @Column(name = "account_number")
+    private String accountNumber;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     // Getters & Setters
+    public String getAccountNumber() {
+        return accountNumber;
+    }
+
+    public void setAccountNumber(String accountNumber) {
+        this.accountNumber = accountNumber;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
     public Long getId() { return id; }
 
     public String getName() { return name; }

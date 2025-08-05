@@ -62,17 +62,32 @@ public class UserController {
 
         User user = optionalUser.get();
 
-        if (updateDTO.getFirstName() != null) user.setFirstName(updateDTO.getFirstName());
-        if (updateDTO.getLastName() != null) user.setLastName(updateDTO.getLastName());
-        if (updateDTO.getPhone() != null) user.setPhone(updateDTO.getPhone());
-        if (updateDTO.getEmail() != null) user.setEmail(updateDTO.getEmail());
-        if (updateDTO.getPassword() != null) {
+        if (updateDTO.getFirstName() != null) {
+            user.setFirstName(updateDTO.getFirstName());
+        }
+        if (updateDTO.getLastName() != null) {
+            user.setLastName(updateDTO.getLastName());
+        }
+        if (updateDTO.getPhone() != null) {
+            user.setPhone(updateDTO.getPhone());
+        }
+        if (updateDTO.getEmail() != null) {
+            user.setEmail(updateDTO.getEmail());
+        }
+
+        if (updateDTO.getPassword() != null && !updateDTO.getPassword().trim().isEmpty()) {
             String hashed = PasswordUtil.hashPassword(updateDTO.getPassword());
             user.setPassword(hashed);
         }
 
-        User updated = userRepository.save(user);
-        return ResponseEntity.ok(updated); // Return full updated user as JSON
+        try {
+            User updated = userRepository.save(user);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            // Log the error for debugging
+            System.err.println("Error updating user: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/{id}")

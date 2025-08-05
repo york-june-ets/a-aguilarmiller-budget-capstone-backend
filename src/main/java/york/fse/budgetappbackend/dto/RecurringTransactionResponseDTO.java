@@ -10,6 +10,7 @@ public class RecurringTransactionResponseDTO {
     private Long userId;
     private Long accountId;
     private String accountName;
+    private String accountNumber;
     private String description;
     private BigDecimal amount;
     private String frequency;
@@ -23,6 +24,7 @@ public class RecurringTransactionResponseDTO {
             Long userId,
             Long accountId,
             String accountName,
+            String accountNumber,
             String description,
             BigDecimal amount,
             String frequency,
@@ -35,6 +37,7 @@ public class RecurringTransactionResponseDTO {
         this.userId = userId;
         this.accountId = accountId;
         this.accountName = accountName;
+        this.accountNumber = accountNumber;
         this.description = description;
         this.amount = amount;
         this.frequency = frequency;
@@ -42,6 +45,14 @@ public class RecurringTransactionResponseDTO {
         this.nextDate = nextDate;
         this.categories = categories;
         this.lastGeneratedDate = lastGeneratedDate;
+    }
+
+    public String getAccountNumber() {
+        return accountNumber;
+    }
+
+    public void setAccountNumber(String accountNumber) {
+        this.accountNumber = accountNumber;
     }
 
     public Long getId() {

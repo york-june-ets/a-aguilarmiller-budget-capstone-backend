@@ -203,6 +203,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             Pageable pageable
     );
 
+    @Query("SELECT DISTINCT c FROM Transaction t JOIN t.categories c WHERE t.user.id = :userId ORDER BY c ASC")
+    List<String> findAllCategoriesByUserId(@Param("userId") Long userId);
+
     @Query(value = """
     SELECT tc.categories as category,
            SUM(t.amount) as total_amount,

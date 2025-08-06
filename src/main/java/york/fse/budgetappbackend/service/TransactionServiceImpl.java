@@ -439,4 +439,9 @@ public class TransactionServiceImpl implements TransactionService {
         response.setAccountId(t.getAccount() != null ? t.getAccount().getId() : null);
         return response;
     }
+
+    @Override
+    public List<String> getAllCategoriesByUser(Long userId) {
+        return transactionRepository.findAllCategoriesByUserId(userId);
+    }
 }

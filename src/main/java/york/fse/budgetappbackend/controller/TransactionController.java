@@ -69,4 +69,10 @@ public class TransactionController {
 
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/categories/user/{userId}")
+    public ResponseEntity<List<String>> getCategoriesByUser(@PathVariable Long userId) {
+        List<String> categories = transactionService.getAllCategoriesByUser(userId);
+        return ResponseEntity.ok(categories);
+    }
 }

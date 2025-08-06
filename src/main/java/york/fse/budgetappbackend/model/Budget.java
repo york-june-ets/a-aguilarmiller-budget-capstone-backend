@@ -29,6 +29,7 @@ public class Budget {
             name = "budget_categories",
             joinColumns = @JoinColumn(name = "budget_id")
     )
+
     @Column(name = "category")
     private List<String> categories = new ArrayList<>();
 

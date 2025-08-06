@@ -11,7 +11,7 @@ public interface TransactionService {
     TransactionResponseDTO updateTransaction(Long id, TransactionRequestDTO dto);
     void deleteTransaction(Long id);
     List<TransactionResponseDTO> getAllTransactionsByUser(Long userId);
-
+    List<String> getAllCategoriesByUser(Long userId);
     Page<TransactionResponseDTO> getTransactionsByUserWithFilters(
             Long userId, int page, int size,
             String startDate, String endDate,

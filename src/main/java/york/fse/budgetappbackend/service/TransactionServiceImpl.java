@@ -11,6 +11,7 @@ import york.fse.budgetappbackend.repository.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageImpl;
@@ -63,10 +64,8 @@ public class TransactionServiceImpl implements TransactionService {
         accountRepository.save(account);
     }
 
-
-// potential issue - this doesnt consider the date a transaction was added. updates regardless of the when
     private void updateBudgetSpend(Long userId, List<String> categories, BigDecimal amount,
-                                   Long selectedBudgetId, boolean isReversal, User user) {
+                                   Long selectedBudgetId, boolean isReversal, User user, LocalDate transactionDate) {
         BigDecimal adjustedAmount = isReversal ? amount.negate() : amount;
 
         if (selectedBudgetId != null) {
@@ -79,18 +78,21 @@ public class TransactionServiceImpl implements TransactionService {
                 throw new IllegalArgumentException("Selected budget does not match transaction categories.");
             }
 
-            BigDecimal previousSpend = selectedBudget.getActualSpend();
-            BigDecimal newSpend = previousSpend.add(adjustedAmount);
-            selectedBudget.setActualSpend(newSpend);
-            budgetRepository.save(selectedBudget);
+            if (isTransactionInBudgetPeriod(transactionDate, selectedBudget.getTimeframe())) {
+                BigDecimal previousSpend = selectedBudget.getActualSpend();
+                BigDecimal newSpend = previousSpend.add(adjustedAmount);
+                selectedBudget.setActualSpend(newSpend);
+                budgetRepository.save(selectedBudget);
 
-            if (!isReversal && user != null) {
-                maybeSendThresholdNotification(selectedBudget, previousSpend, newSpend, user);
+                if (!isReversal && user != null) {
+                    maybeSendThresholdNotification(selectedBudget, previousSpend, newSpend, user);
+                }
             }
         } else {
             List<Budget> userBudgets = budgetRepository.findByUserIdAndEnabledTrue(userId);
             Optional<Budget> firstMatch = userBudgets.stream()
                     .filter(budget -> budget.getCategories().stream().anyMatch(categories::contains))
+                    .filter(budget -> isTransactionInBudgetPeriod(transactionDate, budget.getTimeframe()))
                     .findFirst();
 
             if (firstMatch.isPresent()) {
@@ -104,6 +106,29 @@ public class TransactionServiceImpl implements TransactionService {
                     maybeSendThresholdNotification(budget, previousSpend, newSpend, user);
                 }
             }
+        }
+    }
+
+    private boolean isTransactionInBudgetPeriod(LocalDate transactionDate, String timeframe) {
+        LocalDate now = LocalDate.now();
+
+        switch (timeframe.toLowerCase()) {
+            case "monthly":
+                YearMonth transactionMonth = YearMonth.from(transactionDate);
+                YearMonth currentMonth = YearMonth.from(now);
+                return transactionMonth.equals(currentMonth);
+
+            case "quarterly":
+                int transactionQuarter = (transactionDate.getMonthValue() - 1) / 3 + 1;
+                int currentQuarter = (now.getMonthValue() - 1) / 3 + 1;
+                return transactionDate.getYear() == now.getYear() &&
+                        transactionQuarter == currentQuarter;
+
+            case "yearly":
+                return transactionDate.getYear() == now.getYear();
+
+            default:
+                return false;
         }
     }
 
@@ -213,7 +238,7 @@ public class TransactionServiceImpl implements TransactionService {
         System.out.println("DEBUG: Transaction after save - categories: " + saved.getCategories());
         if (type == TransactionType.EXPENSE) {
             updateBudgetSpend(userId, dto.getCategories(), dto.getAmount(),
-                    dto.getSelectedBudgetId(), false, user);
+                    dto.getSelectedBudgetId(), false, user, dto.getDate());
         }
 
         if ((type == TransactionType.TRANSFER_OUT || type == TransactionType.TRANSFER_IN)
@@ -245,7 +270,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         if (oldType == TransactionType.EXPENSE) {
             updateBudgetSpend(userId, existing.getCategories(), oldAmount,
-                    dto.getSelectedBudgetId(), true, null);
+                    dto.getSelectedBudgetId(), true, null, existing.getDate());
         }
 
         existing.setAmount(newAmount);
@@ -297,11 +322,12 @@ public class TransactionServiceImpl implements TransactionService {
 
         if (newType == TransactionType.EXPENSE) {
             updateBudgetSpend(userId, dto.getCategories(), newAmount,
-                    dto.getSelectedBudgetId(), false, existing.getUser());
+                    dto.getSelectedBudgetId(), false, existing.getUser(), dto.getDate());
         }
 
         return mapToResponseDTO(updated);
     }
+
     @Override
     @Transactional
     public void deleteTransaction(Long id) {
@@ -315,7 +341,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         if (transaction.getType() == TransactionType.EXPENSE) {
             updateBudgetSpend(transaction.getUser().getId(), transaction.getCategories(),
-                    transaction.getAmount(), null, true, null);
+                    transaction.getAmount(), null, true, null, transaction.getDate());
         }
 
         transactionRepository.deleteById(id);
@@ -415,7 +441,6 @@ public class TransactionServiceImpl implements TransactionService {
                 transactionPage = transactionRepository.findByUserIdAndAccountId(
                         userId, accountId, pageable);
             } else {
-
                 transactionPage = transactionRepository.findByUserId(userId, pageable);
             }
         }

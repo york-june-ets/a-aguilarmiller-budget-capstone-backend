@@ -206,6 +206,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query("SELECT DISTINCT c FROM Transaction t JOIN t.categories c WHERE t.user.id = :userId ORDER BY c ASC")
     List<String> findAllCategoriesByUserId(@Param("userId") Long userId);
 
+    @Query("SELECT t FROM Transaction t JOIN t.categories c WHERE t.user.id = :userId " +
+            "AND t.type = 'EXPENSE' " +
+            "AND t.date >= :startDate AND t.date <= :endDate " +
+            "AND c IN :categories")
+    List<Transaction> findExpenseTransactionsByUserAndCategoriesInDateRange(
+            @Param("userId") Long userId,
+            @Param("categories") List<String> categories,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
     @Query(value = """
     SELECT tc.categories as category,
            SUM(t.amount) as total_amount,

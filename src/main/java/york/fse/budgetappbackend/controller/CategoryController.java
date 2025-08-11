@@ -19,8 +19,7 @@ public class CategoryController {
                 "Transportation",
                 "Health",
                 "Savings",
-                "Miscellaneous",
-                "Other"
+                "Miscellaneous"
         );
     }
 }

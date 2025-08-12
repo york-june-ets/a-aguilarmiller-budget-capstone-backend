@@ -103,9 +103,13 @@ public class RecurringTransactionServiceImpl implements RecurringTransactionServ
 
     private LocalDate calculateNextDate(LocalDate start, String frequency) {
         LocalDate now = LocalDate.now();
-        LocalDate nextDate = start;
 
-        while (nextDate.isBefore(now) || nextDate.isEqual(now)) {
+        if (!start.isBefore(now)) {
+            return start;
+        }
+
+        LocalDate nextDate = start;
+        while (nextDate.isBefore(now)) {
             switch (frequency.toLowerCase()) {
                 case "daily":
                     nextDate = nextDate.plusDays(1);

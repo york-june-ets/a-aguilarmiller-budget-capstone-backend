@@ -49,36 +49,21 @@ public class RecurringTransactionScheduler {
     }
 
     private void processRecurringTransaction(RecurringTransaction recurring, LocalDate today, LocalDate endDate) {
-        LocalDate currentDate = recurring.getNextDate();
-        System.out.println("DEBUG: Original nextDate: " + currentDate + ", today: " + today + ", endDate: " + endDate);
+        LocalDate nextDate = recurring.getNextDate();
+        System.out.println("DEBUG: Processing " + recurring.getDescription() + ", nextDate: " + nextDate + ", today: " + today);
 
-        if (currentDate.isAfter(endDate)) {
-            System.out.println("DEBUG: NextDate is beyond our window, starting from today");
-            currentDate = today;
+        if (nextDate.isEqual(today) || nextDate.isBefore(today)) {
+            System.out.println("DEBUG: Transaction is due today or overdue, creating...");
+            createTransactionFromRecurring(recurring, today);
+
+            LocalDate newNextDate = calculateNextDate(today, recurring.getFrequency());
+            recurring.setNextDate(newNextDate);
+            recurringTransactionRepository.save(recurring);
+
+            System.out.println("DEBUG: Created transaction for today, next due date: " + newNextDate);
+        } else {
+            System.out.println("DEBUG: Transaction not due yet (due: " + nextDate + "), skipping...");
         }
-
-        if (currentDate.isBefore(today)) {
-            System.out.println("DEBUG: NextDate is in the past, starting from today");
-            currentDate = today;
-        }
-
-        int transactionsCreated = 0;
-
-        while (currentDate.isBefore(endDate) || currentDate.isEqual(endDate)) {
-            System.out.println("DEBUG: Checking date: " + currentDate + ", creating transaction: " + !currentDate.isBefore(today));
-
-            if (!currentDate.isBefore(today)) {
-                createTransactionFromRecurring(recurring, currentDate);
-                transactionsCreated++;
-            }
-
-            currentDate = calculateNextDate(currentDate, recurring.getFrequency());
-        }
-
-        System.out.println("DEBUG: Created " + transactionsCreated + " transactions for " + recurring.getDescription());
-
-        recurring.setNextDate(currentDate);
-        recurringTransactionRepository.save(recurring);
     }
 
     private LocalDate calculateNextDate(LocalDate currentDate, String frequency) {
